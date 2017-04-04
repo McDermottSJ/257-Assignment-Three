@@ -109,7 +109,7 @@ void transpose(double **matrix, int size){
 	int i, j;
 	double temp;
 
-	for(i = 0; i < size-1; i++){
+	for(i = 0; i < size; i++){
 		for(j = i+1; j<size;j++){
 			temp = matrix[i][j];
 			matrix[i][j] = matrix[j][i];
@@ -145,7 +145,7 @@ void transposeMult(double **matrix, double **transMatrix, double *output, int si
 	       {
 			   for (k=0; k<size; k++)
 			   {
-				   output[i*size+j]= output[i*size+j] + matrix[i][k] * transMatrix[k][j];
+				   output[i*size+j]= output[i*size+j] + matrix[i][k] * transMatrix[j][k];
 			   }
 	       }
 	   }
@@ -195,6 +195,15 @@ void blockMult(double **matrixA, double **matrixB, double *output, int blockSize
     }
 }
 
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Function     : setupSharedMem
+// Description  : creates semaphores and shared memory for a 1D matrix 
+//
+// Inputs       : int size for the dimensions of the matrix
+// Outputs      : N/A
 void setupSharedMem(int size){
 	int shmfd;
 
@@ -211,7 +220,7 @@ void setupSharedMem(int size){
 	}
 	close(shmfd);
 	shm_unlink("/mcdermottsjSemaphores");
-
+	//TODO remove this vvv
 
 /*
 	shmfd = shm_open("/mcdermottsjSharedA", O_RDWR | O_CREAT, 0666);
@@ -266,6 +275,25 @@ void setupSharedMem(int size){
 
 ////////////////////////////////////////////////////////////////////////////////
 //
+// Function     : initSems 
+// Description  : intitalizes semaphores 
+//
+// Inputs       : int size for the dimensions of the matrix
+// Outputs      : N/A
+void initSems(int size){
+	int i;
+	for(i = 0; i < size*size; i++){
+		if(sem_init(semaphores+i, 1, 1)<0){
+			printf("semaphore init error.");
+			exit(1);
+		}
+	}
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
 // Function     : threadedBlockMult
 // Description  : splits matrices into blocks and multiplies the smaller chunks using multiple processes
 //
@@ -273,7 +301,7 @@ void setupSharedMem(int size){
 // Outputs      : N/A
 void threadedBlockMult(double **matrixA, double **matrixB, double *output, int blockSize, int size){
     int i, j, k, l, m, n, imin=0, jmin=0, kmin=0;
-
+	int count =0;
 
     //Fill output matrices with zeros
     for(i=0;i<size;i++){
@@ -295,6 +323,7 @@ void threadedBlockMult(double **matrixA, double **matrixB, double *output, int b
 
                 kmin = min( k + blockSize, size);
                 
+		count++;
 		int childPid = fork();
 		if(childPid < 0){
 			printf("fork faild at %d\n", i);
@@ -309,9 +338,9 @@ void threadedBlockMult(double **matrixA, double **matrixB, double *output, int b
                 	for (l=i; l < imin; l++){
                     		for(m=j; m < jmin; m++){
                         		for(n=k; n < kmin; n++){
-						sem_wait(&semaphores[i*size+j]);
+						sem_wait(&semaphores[l*size+m]);
 	                            		output[l*size+m] = output[l*size+m] + matrixA[l][n] * matrixB[n][m];
-						sem_post(&semaphores[i*size+j]);
+						sem_post(&semaphores[l*size+m]);
                 	        	}
                    		 }
                		}
@@ -320,6 +349,9 @@ void threadedBlockMult(double **matrixA, double **matrixB, double *output, int b
             }
         }
     }
+    for(i = 0; i < count; i++){
+    	wait(NULL);
+    }	
 }
 
 
@@ -327,6 +359,8 @@ void threadedBlockMult(double **matrixA, double **matrixB, double *output, int b
 int main (void)
 {
      int i, j, n, blockSize;
+	//srand(time(NULL));TODO uncomment
+	
 
      printf ( "Enter the value of n: ");
      scanf ( "%d", &n);
@@ -359,6 +393,14 @@ int main (void)
         for (j=0; j<n; j++)
           b[i][j]=(rand() % (99 + 1 - 0) +0 );
       }
+      
+      //todo remove
+
+     for (i=0; i<n; i++)
+     {
+        for (j=0; j<n; j++)
+         c[i*n+j]=0;
+      }
 
 
       //standard multiplication
@@ -373,13 +415,11 @@ int main (void)
       printf ( "DP MFLOPS:       %10.2f \n", mf);
 
       //transposed multiplication
-      printMatrix(a, n);
-      printMatrix(b, n);
       start = ftime();
 
       transpose(b, n);
       transposeMult(a,b,c,n);
-
+	transpose(b,n);
       stop = ftime();
       used = stop - start;
       mf = (n*n*n * 2.0) / used / 1000000.0;
@@ -387,12 +427,10 @@ int main (void)
       printf ("Transposed Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
       printf ( "DP MFLOPS:       %10.2f \n", mf);
+	
 
-      printOneDMatrix(c, n);
-
-/*
       //Blocked multiplication
-      start = ftime();
+	start = ftime();
       blockMult(a,b,c,blockSize, n);
       stop = ftime();
       used = stop - start;
@@ -401,24 +439,19 @@ int main (void)
       printf ("Block Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
       printf ( "DP MFLOPS:       %10.2f \n", mf);
-	printOneDMatrix(c, n);
-*/
 	
 
-      //Threading test
-      /*
-      pid_t childpid = fork();
-      int status;
-      if(childpid >= 0){//test for success
-    	  if(childpid == 0){//to be run by child
-    		  printf("child\n");
-    	  }
-    	  else{//to be run by parent
-    		  printf("parent\n");
-    		  wait(&status);
-    		  printf("child exited with exit code %d\n", status);
-    	  }
-      }*/
+	//threaded mult
+	start = ftime();
+	initSems(n);
+      threadedBlockMult(a,b,c,blockSize, n);
+      stop = ftime();
+      used = stop - start;
+      mf = (n*n*n *2.0) / used / 1000000.0;//TODO check this
+      printf ("\n");
+      printf ("Threaded Block Multiplication:\n");
+      printf ( "Elapsed time:   %10.2f \n", used);
+      printf ( "DP MFLOPS:       %10.2f \n", mf);
 
 	printf("\n\n");
       return (0);
