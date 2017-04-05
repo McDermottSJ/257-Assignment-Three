@@ -46,6 +46,16 @@ void printMatrix(double **matrix, int size){
 	}
 		printf("\n");
 }
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Function     : printOneDMatrix
+// Description  : helper function to print a single one dimensional matrix
+//
+// Inputs       : a pointer to an array(1D matrix), the size
+// Outputs      : N/A
 void printOneDMatrix(double *matrix, int size){
 	int i, j;
 	for(i = 0; i <size; i++){
@@ -206,66 +216,34 @@ void blockMult(double **matrixA, double **matrixB, double *output, int blockSize
 // Outputs      : N/A
 void setupSharedMem(int size){
 	int shmfd;
-
+	
+	//semaphores
 	shmfd = shm_open("/mcdermottsjSemaphores", O_RDWR | O_CREAT, 0666);
 	if(shmfd < 0){
 		printf("error creating semaphores. Error code %d\n", shmfd);
-		exit(1);
+		exit(4);
 	}
 	ftruncate(shmfd, size * size * sizeof(sem_t));
 	semaphores = (sem_t *)mmap (NULL, size*size*sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd,0);
 	if(semaphores == NULL){
 		printf("semaphores failed");
-		exit(1);
+		exit(4);
 	}
 	close(shmfd);
 	shm_unlink("/mcdermottsjSemaphores");
-	//TODO remove this vvv
-
-/*
-	shmfd = shm_open("/mcdermottsjSharedA", O_RDWR | O_CREAT, 0666);
-	if(shmfd < 0){
-		printf("error creating shared mem A. Error code %d\n", shmfd);
-		exit(1);
-	}
-	ftruncate(shmfd, size * size * sizeof(double));
-	sharedA = (double (*))mmap (NULL, size * size * sizeof(double), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd,0);
-	if(sharedA == NULL){
-		printf("shared mem A failed");
-		exit(1);
-	}
-	close(shmfd);
-	shm_unlink("/mcdermottsjSharedA");
 
 
-
-	shmfd = shm_open("/mcdermottsjSharedB", O_RDWR | O_CREAT, 0666);
-	if(shmfd < 0){
-		printf("error creating shared mem B. Error code %d\n", shmfd);
-		exit(1);
-	}
-	ftruncate(shmfd, size * size * sizeof(double));
-	sharedB = (double (*))mmap (NULL, size*size*sizeof(double), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd,0);
-	if(sharedB == NULL){
-		printf("shared mem B failed");
-		exit(1);
-	}
-	close(shmfd);
-	shm_unlink("/mcdermottsjSharedB");*/
-
-
-
-
+	//shared 1D matrix
 	shmfd = shm_open("/mcdermottsjSharedC", O_RDWR | O_CREAT, 0666);
 	if(shmfd < 0){
 		printf("error creating shared mem C. Error code %d\n", shmfd);
-		exit(1);
+		exit(4);
 	}
 	ftruncate(shmfd, size * size * sizeof(double));
 	c = (double (*))mmap (NULL, size*size*sizeof(double), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd,0);
 	if(c == NULL){
 		printf("shared mem C failed");
-		exit(1);
+		exit(4);
 	}
 	close(shmfd);
 	shm_unlink("/mcdermottsjSharedC");
@@ -285,7 +263,7 @@ void initSems(int size){
 	for(i = 0; i < size*size; i++){
 		if(sem_init(semaphores+i, 1, 1)<0){
 			printf("semaphore init error.");
-			exit(1);
+			exit(3);
 		}
 	}
 }
@@ -324,11 +302,12 @@ void threadedBlockMult(double **matrixA, double **matrixB, double *output, int b
                 kmin = min( k + blockSize, size);
                 
 		count++;
+		fflush(0);
 		int childPid = fork();
 		if(childPid < 0){
 			printf("fork faild at %d\n", i);
 			printf("Use larger block size\n");
-			exit(1);
+			exit(2);
 		}
 		else if (childPid > 0){//parent func
 			//something for parent
@@ -359,15 +338,19 @@ void threadedBlockMult(double **matrixA, double **matrixB, double *output, int b
 int main (void)
 {
      int i, j, n, blockSize;
-	//srand(time(NULL));TODO uncomment
+	srand(time(NULL));//TODO check at end to make sure things still multiply right
 	
-
      printf ( "Enter the value of n: ");
      scanf ( "%d", &n);
-     printf("Enter the desired block size: ");
-     scanf("%d", &blockSize);
+//     printf("Enter the desired block size: ");
+//     scanf("%d", &blockSize);
 
+	do{//TODO remove, for data collection
+	
+	blockSize = n/4;
+	
 	printf("\nn size: %d\nblocksize: %d\n", n, blockSize);
+
 
      //Populate arrays....
      a= (double**)malloc(n*sizeof(double));
@@ -394,7 +377,6 @@ int main (void)
           b[i][j]=(rand() % (99 + 1 - 0) +0 );
       }
       
-      //todo remove
 
      for (i=0; i<n; i++)
      {
@@ -402,13 +384,12 @@ int main (void)
          c[i*n+j]=0;
       }
 
-
       //standard multiplication
       start = ftime();
       multiply (a,b,c,n);
       stop = ftime();
       used = stop - start;
-      mf = (n*n*n *2.0) / used / 1000000.0;
+      mf = (2.0 *n*n*n) / used / 1000000.0;//TODO check this
       printf ("\n");
       printf ("Standard Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
@@ -422,7 +403,7 @@ int main (void)
 	transpose(b,n);
       stop = ftime();
       used = stop - start;
-      mf = (n*n*n * 2.0) / used / 1000000.0;
+      mf = (2.0 *n*n*n) / used / 1000000.0;//TODO check this
       printf ("\n");
       printf ("Transposed Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
@@ -434,12 +415,11 @@ int main (void)
       blockMult(a,b,c,blockSize, n);
       stop = ftime();
       used = stop - start;
-      mf = (n*n*n *2.0) / used / 1000000.0;//TODO check this
+      mf = (2.0 *n*n*n) / used / 1000000.0;//TODO check this
       printf ("\n");
       printf ("Block Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
       printf ( "DP MFLOPS:       %10.2f \n", mf);
-	
 
 	//threaded mult
 	start = ftime();
@@ -447,13 +427,16 @@ int main (void)
       threadedBlockMult(a,b,c,blockSize, n);
       stop = ftime();
       used = stop - start;
-      mf = (n*n*n *2.0) / used / 1000000.0;//TODO check this
+      mf = (2.0 *n*n*n) / used / 1000000.0;//TODO check this
       printf ("\n");
       printf ("Threaded Block Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
       printf ( "DP MFLOPS:       %10.2f \n", mf);
 
 	printf("\n\n");
+	n += 200;
+
+	}while(n < 4500);
       return (0);
 }
 
