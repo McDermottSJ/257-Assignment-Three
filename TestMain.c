@@ -14,7 +14,6 @@
 double start, stop, used, mf;
 
 double ftime(void);
-//void multiply (double **a, double **b, double **c, int n);
 
 sem_t *semaphores;
 double **a, **b;
@@ -335,36 +334,40 @@ void threadedBlockMult(double **matrixA, double **matrixB, double *output, int b
 
 
 
-int main (void)
+int main (int argc, char *argv[])
 {
-     int i, j, n, blockSize;
-	srand(time(NULL));//TODO check at end to make sure things still multiply right
-	
-     printf ( "Enter the value of n: ");
-     scanf ( "%d", &n);
-//     printf("Enter the desired block size: ");
-//     scanf("%d", &blockSize);
+	int i, j, n, blockSize;
+	srand(time(NULL));//make random take sys time as seed
 
-	do{//TODO remove, for data collection
-	
-	blockSize = n/4;
+	if(argc != 3){	//if not correct command line args
+    		 printf ( "Enter the value of n: ");
+    		 scanf ( "%d", &n);
+    		 printf("Enter the desired block size: ");
+     	 	 scanf("%d", &blockSize);
+	}
+	else{
+		n = argv[1];
+		blockSize = argv[2];
+	}
 	
 	printf("\nn size: %d\nblocksize: %d\n", n, blockSize);
 
 
-     //Populate arrays....
-     a= (double**)malloc(n*sizeof(double));
-     b= (double**)malloc(n*sizeof(double));
-
+	//Populate arrays....
+	a= (double**)malloc(n*sizeof(double));
+	b= (double**)malloc(n*sizeof(double));
+	
+	//allocate memory for semaphores and output matrix
 	setupSharedMem(n);
 
-
+	//allocate memory for input matrices 
      for (i=0; i<n; i++)
      {
        a[i]= malloc(sizeof(double)*n);
        b[i]= malloc(sizeof(double)*n);
       }
 
+	//fill matrices with random doubles between 0 and 99
      for (i=0; i<n; i++)
      {
         for (j=0; j<n; j++)
@@ -377,7 +380,7 @@ int main (void)
           b[i][j]=(rand() % (99 + 1 - 0) +0 );
       }
       
-
+	//"calloc" output matrix
      for (i=0; i<n; i++)
      {
         for (j=0; j<n; j++)
@@ -389,7 +392,7 @@ int main (void)
       multiply (a,b,c,n);
       stop = ftime();
       used = stop - start;
-      mf = (2.0 *n*n*n) / used / 1000000.0;//TODO check this
+      mf = (2.0 *n*n*n) / used / 1000000.0;
       printf ("\n");
       printf ("Standard Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
@@ -403,7 +406,7 @@ int main (void)
 	transpose(b,n);
       stop = ftime();
       used = stop - start;
-      mf = (2.0 *n*n*n) / used / 1000000.0;//TODO check this
+      mf = (2.0 *n*n*n) / used / 1000000.0;
       printf ("\n");
       printf ("Transposed Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
@@ -415,7 +418,7 @@ int main (void)
       blockMult(a,b,c,blockSize, n);
       stop = ftime();
       used = stop - start;
-      mf = (2.0 *n*n*n) / used / 1000000.0;//TODO check this
+      mf = (2.0 *n*n*n) / used / 1000000.0;
       printf ("\n");
       printf ("Block Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
@@ -427,7 +430,7 @@ int main (void)
       threadedBlockMult(a,b,c,blockSize, n);
       stop = ftime();
       used = stop - start;
-      mf = (2.0 *n*n*n) / used / 1000000.0;//TODO check this
+      mf = (2.0 *n*n*n) / used / 1000000.0;
       printf ("\n");
       printf ("Threaded Block Multiplication:\n");
       printf ( "Elapsed time:   %10.2f \n", used);
@@ -436,7 +439,6 @@ int main (void)
 	printf("\n\n");
 	n += 200;
 
-	}while(n < 4500);
       return (0);
 }
 
