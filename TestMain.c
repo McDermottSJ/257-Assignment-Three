@@ -346,12 +346,11 @@ int main (int argc, char *argv[])
      	 	 scanf("%d", &blockSize);
 	}
 	else{
-		n = argv[1];
-		blockSize = argv[2];
+		n = atoi(argv[1]);
+		blockSize = atoi(argv[2]);
 	}
 	
 	printf("\nn size: %d\nblocksize: %d\n", n, blockSize);
-
 
 	//Populate arrays....
 	a= (double**)malloc(n*sizeof(double));
